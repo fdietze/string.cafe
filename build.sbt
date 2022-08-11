@@ -12,6 +12,12 @@ val versions = new {
   val pprint    = "0.7.3"
 }
 
+ThisBuild / resolvers ++= Seq(
+  "Sonatype OSS Snapshots" at "https://oss.sonatype.org/content/repositories/snapshots",
+  "Sonatype OSS Snapshots S01" at "https://s01.oss.sonatype.org/content/repositories/snapshots", // https://central.sonatype.org/news/20210223_new-users-on-s01/
+  "Jitpack" at "https://jitpack.io",
+)
+
 lazy val commonSettings = Seq(
   addCompilerPlugin("org.typelevel" % "kind-projector" % "0.13.2" cross CrossVersion.full),
 
@@ -43,11 +49,14 @@ lazy val webapp = project
   .settings(commonSettings, jsSettings)
   .settings(
     libraryDependencies              ++= Seq(
-      "io.github.outwatch"   %%% "outwatch"            % versions.outwatch,
-      "io.github.fun-stack"  %%% "fun-stack-web"       % versions.funStack,
-      "io.github.fun-stack"  %%% "fun-stack-web-tapir" % versions.funStack, // this pulls in scala-java-time, which will drastically increase the javascript bundle size. Remove if not needed.
-      "com.github.cornerman" %%% "colibri-router"      % versions.colibri,
-      "io.suzaku"            %%% "boopickle"           % versions.boopickle,
+      "io.github.outwatch"            %%% "outwatch"            % versions.outwatch,
+      "io.github.fun-stack"           %%% "fun-stack-web"       % versions.funStack,
+      "io.github.fun-stack"           %%% "fun-stack-web-tapir" % versions.funStack, // this pulls in scala-java-time, which will drastically increase the javascript bundle size. Remove if not needed.
+      "com.github.cornerman"          %%% "colibri-router"      % versions.colibri,
+      "com.github.cornerman"          %%% "colibri-reactive"    % versions.colibri,
+      "com.github.fdietze.formidable" %%% "formidable"          % "cf66db31f9",
+      "io.suzaku"                     %%% "boopickle"           % versions.boopickle,
+      "pt.kcry"                       %%% "sha"                 % "2.0.1",
     ),
     Compile / npmDependencies        ++= readJsDependencies(baseDirectory.value, "dependencies") ++ Seq(
       "snabbdom"               -> "github:outwatch/snabbdom.git#semver:0.7.5", // for outwatch, workaround for: https://github.com/ScalablyTyped/Converter/issues/293

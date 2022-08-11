@@ -1,20 +1,27 @@
 name: Build
 on:
   push:
-    branches:
-      - master
+    branches: ["main"]
   pull_request:
+    types: [ opened, synchronize ]
   workflow_dispatch:
+
+# automatically cancel previous runs on the same PR
+# https://stackoverflow.com/questions/66335225/how-to-cancel-previous-runs-in-the-pr-when-you-push-new-commitsupdate-the-curre/67939898#67939898
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
 
 jobs:
   build:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
 
     steps:
       - uses: actions/checkout@v3
       - uses: coursier/cache-action@v6
       - uses: olafurpg/setup-scala@v13
-
+        with:
+          java-version: openjdk@1.17
 
 
       # https://github.com/actions/cache/blob/master/examples.md#node---yarn
@@ -29,14 +36,6 @@ jobs:
           key: ${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}
           restore-keys: |
             ${{ runner.os }}-yarn-
-
-
-      - uses: actions/cache@v3
-        name: Cache node_modules
-        with:
-          path: "node_modules"
-          key: ${{ runner.os }}-node_modules-${{ hashFiles('yarn.lock') }}
-          restore-keys: ${{ runner.os }}-node_modules
 
       - uses: actions/cache@v3
         name: Cache scalajs-bundler node_modules
@@ -55,59 +54,18 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-scalablytyped-
 
-      - name: Cache Cypress binary
-        uses: actions/cache@v3
-        with:
-          path: |
-            ~/.cache/Cypress
-          key: ${{ runner.os }}-scalablytyped-${{ hashfiles('build.sbt') }}-${{ hashFiles('*/yarn.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-scalablytyped-
-
-
-
-
       - name: Compile and Bundle
         run: |
           # Runner has 7G of RAM, so 4G for sbt is ok here:
           # https://docs.github.com/en/actions/using-github-hosted-runners/about-github-hosted-runners#supported-runners-and-hardware-resources
-          sbt --mem 4096 scalafmtCheck scalafmtSbtCheck compile {webapp,lambda}/fastOptJS/webpack prod
+          sbt --mem 4096 scalafmtCheck scalafmtSbtCheck prod
 
-      - uses: hashicorp/setup-terraform@v2
-      - name: Validate Terraform
-        run: |
-          cd terraform
-          terraform init
-          terraform validate
-
-      - name: yarn install
-        run: yarn install
-
-      - name: End-to-End Tests
-        run: |
-          # Start frontend dev-webserver
-          (sbt webapp/fastOptJS/startWebpackDevServer shell || kill 0) &
-
-          # Start the lambda backend
-          (npx fun-local-env \
-              --auth 8082 \
-              --ws 8081 \
-              --http 8080 \
-              --http-api lambda/target/scala-2.13/scalajs-bundler/main/lambda-fastopt.js httpApi \
-              --http-rpc lambda/target/scala-2.13/scalajs-bundler/main/lambda-fastopt.js httpRpc \
-              --ws-rpc lambda/target/scala-2.13/scalajs-bundler/main/lambda-fastopt.js wsRpc \
-              --ws-event-authorizer lambda/target/scala-2.13/scalajs-bundler/main/lambda-fastopt.js wsEventAuth \
-                > /dev/null || kill 0) &
-
-          # Test http api
-          until nc -z 127.0.0.1 8080 &>/dev/null; do sleep 0.5; done
-          [ "$(curl -v localhost:8080/books/drama/2011?limit=10)" == '[{"title":"Programming in Scala"}]' ]
-
-          # Wait until the dev server is running
-          npx wait-on http://localhost:12345
-
-          # Run UI tests
-          npx cypress run
+      - name: Deploy to Github Pages
+        if: github.ref == 'refs/heads/main' && startsWith(matrix.scalaVersion, '2.13')
+        uses: JamesIves/github-pages-deploy-action@v4.4.0
+        with:
+          branch: gh-pages # The branch the action should deploy to.
+          folder: webapp/target/scala-2.13/scalajs-bundler/main/dist # The folder the action should deploy.
 
       # - name: Debug over SSH (tmate)
       #   # if: ${{ failure() }}
