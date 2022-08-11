@@ -65,7 +65,7 @@ object App {
           roomName = roomName,
           width = 700,
           height = 700,
-          parentNode = dom.document.querySelector("#meet"),
+          parentNode = elem,
           lang = language,
         )
         val api     = new JitsiMeetExternalAPI(domain, options)
