@@ -3,9 +3,10 @@ package example.api
 import io.circe.generic.JsonCodec
 
 trait RpcApi[F[_]] {
-  def numberToString(number: Int): F[String]
-  def scale(point: Point, factor: Double): F[Point]
-  def getRandomNumber: F[Int]
+  def listMeetings: F[List[String]]
+  def createMeeting: F[String]
+  def joinMeeting(userName: String, meetingId: String): F[String]
+  def join(string: String): F[JoinInfo]
 }
 
-@JsonCodec case class Point(x: Double, y: Double)
+@JsonCodec case class JoinInfo(meeting: String, Attendee: String)

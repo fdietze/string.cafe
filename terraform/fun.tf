@@ -4,7 +4,7 @@ locals {
 
 module "example" {
   source  = "fun-stack/fun/aws"
-  version = "0.6.5"
+  version = "0.10.4"
 
   stage = terraform.workspace
 
@@ -17,7 +17,7 @@ module "example" {
   website = {
     source_dir              = "../webapp/target/scala-2.13/scalajs-bundler/main/dist"
     cache_files_regex       = ".*-hashed.(js|css)"
-    content_security_policy = "default-src 'self'; connect-src https://* wss://*; frame-ancestors 'none'; frame-src 'none';"
+    # content_security_policy = "default-src 'self'; connect-src https://* wss://*; frame-ancestors 'none'; frame-src 'none';"
     rewrites = {
       "robots.txt" = "robots.deny.txt" # local.is_prod ? "robots.allow.txt" : "robots.deny.txt"
     }
@@ -67,10 +67,10 @@ module "example" {
     }
   }
 
-  auth = {
-    image_file = "auth.jpg"
-    css_file   = "auth.css"
-  }
+  # auth = {
+  #   image_file = "auth.jpg"
+  #   css_file   = "auth.css"
+  # }
 
   # budget = {
   #   limit_monthly_dollar = "10.0"
@@ -81,4 +81,30 @@ module "example" {
   #   # enabled           = !local.is_prod
   #   local_website_url = "http://localhost:12345" # auth can redirect to that website, cors of http api allows origin
   # }
+
+  providers = {
+    aws = aws
+    aws.us-east-1 = aws.us-east-1
+  }
+}
+
+resource "aws_iam_policy" "lambda" {
+  name   = "lambda"
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = [
+          "chime:*"
+        ]
+        Effect   = "Allow"
+        Resource = "*"
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "lambda" {
+  role       = module.example.http_rpc_role.name
+  policy_arn = aws_iam_policy.lambda.arn
 }

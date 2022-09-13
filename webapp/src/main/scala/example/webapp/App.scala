@@ -1,80 +1,209 @@
 package example.webapp
 
+import colibri.Cancelable
+import colibri.reactive._
+import org.scalajs.dom
+import org.scalajs.dom.{console, document, HTMLAudioElement, HTMLVideoElement}
 import outwatch._
 import outwatch.dsl._
-import funstack.web.Fun
+import typings.amazonChimeSdkJs.audioVideoObserverMod.AudioVideoObserver
+import typings.amazonChimeSdkJs.{defaultMeetingSessionMod, meetingSessionConfigurationMod}
+import typings.amazonChimeSdkJs.mod.{ConsoleLogger, DefaultDeviceController, DefaultMeetingSession, LogLevel}
+
+import scala.scalajs.js
+import scala.scalajs.js.annotation.{JSGlobal, JSImport}
+import org.scalajs.macrotaskexecutor.MacrotaskExecutor.Implicits.global
+
+@JSImport("amazon-chime-sdk-js", "DefaultMeetingSession")
+@js.native
+class MyDefaultMeetingSession extends js.Object {
+  def this(
+    configuration: js.Any,
+    logger: js.Any,
+    deviceController: js.Any,
+  ) = this()
+}
+
+@js.native
+@JSGlobal
+class JitsiMeetExternalAPI(domain: String, options: js.Object) extends js.Object {
+  // https://jitsi.github.io/handbook/docs/dev-guide/dev-guide-iframe/#creating-the-jitsi-meet-api-object
+  def dispose(): Unit                                    = js.native
+  def getNumberOfParticipants(): Int                     = js.native
+  def executeCommand(command: String, arg: String): Unit = js.native
+}
 
 object App {
 
-  // For styling, we use tailwindcss and daisyui:
-  // - https://tailwindcss.com/ - basic styles like p-5, space-x-2, mb-auto, ...
-  // - https://daisyui.com/ - based on tailwindcss with components like btn, navbar, footer, ...
+  val logger = new ConsoleLogger(
+    "ChimeMeetingLogs",
+    // LogLevel.INFO,
+  );
+  val deviceController = new DefaultDeviceController(logger);
 
-  val layout = div(
-    cls := "flex flex-col h-screen",
-    pageHeader,
-    pageBody,
-    pageFooter,
-  )
+  def createMeeting(audioElement: HTMLAudioElement, meeting: js.Dynamic, attendee: js.Dynamic) = {
+    console.log("DU DEV", deviceController)
 
-  def pageHeader =
-    header(
-      div(
-        pageLink("Home", Page.Home),
-        pageLink("API", Page.Api)(cls := "nav-api"),
-        cls := "space-x-2",
-      ),
-      div(
-        authControls,
-        cls := "ml-auto",
-      ),
-      cls := "navbar shadow-lg",
-    )
+    // val meetingId      = data.Info.Meeting.Meeting.MeetingId;
+    // if (isMeetingHost) {
+    //  document.getElementById("meeting-link").innerText = window.location.href + "?meetingId=" + meetingId;
+    // }
 
-  def authControls =
-    Fun.auth.currentUser.map {
-      case Some(user) =>
-        a(s"Logout (${user.info.email})", href := Fun.auth.logoutUrl, cls := "btn btn-primary", cls := "logout-button")
-      case None => a("Login", href := Fun.auth.loginUrl, cls := "btn btn-primary", cls := "login-button")
-    }
+    console.log(meeting, attendee)
 
-  def pageLink(name: String, page: Page): VNode = {
-    val styling = Page.current.map {
-      case `page` => cls := "btn-neutral"
-      case _      => cls := "btn-ghost"
-    }
+    val configuration = new meetingSessionConfigurationMod.default(
+      meeting,
+      attendee,
+    );
 
-    a(cls := "btn", name, page.href, styling)
+    console.log("HAVE IT", configuration)
+    val meetingSession = new MyDefaultMeetingSession(
+      configuration,
+      logger,
+      deviceController,
+    ).asInstanceOf[DefaultMeetingSession];
+    console.log(meetingSession)
+
+    for {
+      audioInputs <- meetingSession.audioVideo.listAudioInputDevices().toFuture
+      _            = println("HALLO")
+      videoInputs <- meetingSession.audioVideo.listVideoInputDevices().toFuture
+      _            = println("WO?")
+
+      _ <- meetingSession.audioVideo
+             // .startAudioInput(audioInputs(0).deviceId)
+             .asInstanceOf[js.Dynamic]
+             .chooseAudioInputDevice(audioInputs(0).deviceId)
+             .asInstanceOf[js.Promise[Any]]
+             .toFuture
+
+      _ = println("hat audio")
+      _ <- meetingSession.audioVideo
+             // .startVideoInput(videoInputs(0).deviceId)
+             .asInstanceOf[js.Dynamic]
+             .chooseVideoInputDevice(videoInputs(0).deviceId)
+             .asInstanceOf[js.Promise[Any]]
+             .toFuture
+      _ = println("casino")
+    } yield {
+      // videoTileDidUpdate is called whenever a new tile is created or tileState changes.
+      val observer = AudioVideoObserver().setVideoTileDidUpdate { tileState =>
+        console.log("VIDEO TILE DID UPDATE");
+        console.log(tileState);
+        // Ignore a tile without attendee ID and other attendee's tile.
+        if (tileState.boundAttendeeId != null) {
+          updateTiles(meetingSession);
+        }
+      // }.setAudioVideoDidStop { sessionStatus =>
+      // v3
+      // meetingSession.audioVideo.stopAudioInput();
+      // Or use the destroy API to call stopAudioInput and stopVideoInput.
+      // meetingSession.deviceController.destroy();
+      }
+
+      meetingSession.audioVideo.addObserver(observer);
+
+      println("LOLITA")
+      meetingSession.audioVideo.startLocalVideoTile();
+
+      println("BOUNDING")
+      meetingSession.audioVideo.bindAudioElement(audioElement).toFuture.foreach { _ =>
+        println("DINGDING")
+        meetingSession.audioVideo.start();
+      }
+    };
   }
 
-  def pageBody = div(
-    cls := "p-10 mb-auto",
-    // client-side router depending on the path in the address bar
-    Page.current.map {
-      case Page.Home =>
-        div(
-          cls := "text-bold",
-          "Welcome!",
-        )
-      case Page.Api =>
-        div(
-          cls := "space-y-4",
-          Components.httpApi,
-          Components.httpRpcApi,
-          Components.websocketRpcApi,
-          Components.websocketEvents,
-        )
-    },
+  def updateTiles(meetingSession: DefaultMeetingSession) = {
+    val tiles = meetingSession.audioVideo.getAllVideoTiles();
+    console.log("tiles", tiles);
+    tiles.foreach { tile =>
+      val tileId            = tile.state().tileId.asInstanceOf[Double]
+      val existVideoElement = document.getElementById("video-" + tileId);
+
+      if (existVideoElement == null) {
+        val videoElement = document.createElement("video").asInstanceOf[HTMLVideoElement]
+        videoElement.id = "video-" + tileId;
+        document.getElementById("video-list").append(videoElement);
+        meetingSession.audioVideo.bindVideoElement(
+          tileId,
+          videoElement,
+        );
+      }
+    }
+  }
+
+  def videoCallRender(meeting: js.Dynamic, attendee: js.Dynamic) = div(
+    idAttr := "video-list",
+    "VIDEO TILES",
+    audio(
+      onDomMount.mapFuture { audioElement =>
+        try {
+
+          createMeeting(audioElement.asInstanceOf[HTMLAudioElement], meeting, attendee)
+        } catch { case t: Throwable => t.printStackTrace(); throw t }
+      }.discard,
+    ),
   )
 
-  def pageFooter =
-    footer(
-      cls := "p-5 footer bg-base-200 text-base-content footer-center",
-      div(
-        cls := "flex flex-row space-x-4",
-        a(cls := "link link-hover", href := "#", "About us"),
-        a(cls := "link link-hover", href := "#", "Contact"),
-      ),
+  val currentMeeting = Var(Option.empty[String])
+
+  def layout = {
+    div(
+      Owned[VModifier] {
+        currentMeeting.map[VModifier] {
+          case None =>
+            val listMeetings = HttpRpcClient.api.listMeetings
+            div(
+              button(
+                "Create Meeting",
+                cls := "btn btn-small",
+                onClick.doEffect(HttpRpcClient.api.createMeeting.void),
+              ),
+              listMeetings.map { meetingsJson =>
+                meetingsJson.map { meetingJson =>
+                  div(
+                    s"Meeting: ${js.JSON.parse(meetingJson).MeetingId}",
+                    button(
+                      "Join",
+                      cls := "btn btn-small",
+                      onClick.as(Some(meetingJson)) --> currentMeeting,
+                    ),
+                  )
+                }
+              },
+            )
+          case Some(meetingJson) =>
+            val meeting = js.JSON.parse(meetingJson)
+            val getAttendee = HttpRpcClient.api
+              .joinMeeting(util.Random.alphanumeric.take(5).mkString, meeting.MeetingId.asInstanceOf[String])
+            getAttendee.map { attendeeJson =>
+              val attendee = js.JSON.parse(attendeeJson)
+
+              videoCallRender(meeting, attendee)
+            }
+        }
+      },
     )
+  }
+
+  def jitsiRoom(roomName: String, language: String, subject: String) = {
+    div(
+      VModifier.managedElement.asHtml { elem =>
+        val domain = "meet.jit.si"
+        val options = js.Dynamic.literal(
+          roomName = roomName,
+          width = 700,
+          height = 700,
+          parentNode = elem,
+          lang = language,
+        )
+        val api = new JitsiMeetExternalAPI(domain, options)
+        api.executeCommand("localSubject", subject);
+
+        Cancelable(() => api.dispose())
+      },
+    )
+  }
 
 }

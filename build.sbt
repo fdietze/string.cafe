@@ -12,11 +12,11 @@ val versions = new {
 }
 
 // Uncomment, if you want to use snapshot dependencies from sonatype or jitpack
-// ThisBuild / resolvers ++= Seq(
-//   "Sonatype OSS Snapshots" at "https://oss.sonatype.org/content/repositories/snapshots",
-//   "Sonatype OSS Snapshots S01" at "https://s01.oss.sonatype.org/content/repositories/snapshots", // https://central.sonatype.org/news/20210223_new-users-on-s01/
-//   "Jitpack" at "https://jitpack.io",
-// )
+ThisBuild / resolvers ++= Seq(
+  "Sonatype OSS Snapshots" at "https://oss.sonatype.org/content/repositories/snapshots",
+  "Sonatype OSS Snapshots S01" at "https://s01.oss.sonatype.org/content/repositories/snapshots", // https://central.sonatype.org/news/20210223_new-users-on-s01/
+  "Jitpack" at "https://jitpack.io",
+)
 
 val enableFatalWarnings =
   sys.env.get("ENABLE_FATAL_WARNINGS").flatMap(value => scala.util.Try(value.toBoolean).toOption).getOrElse(false)
@@ -71,6 +71,7 @@ lazy val webapp = project
       "io.github.fun-stack"  %%% "fun-stack-web"       % versions.funStack,
       "io.github.fun-stack"  %%% "fun-stack-web-tapir" % versions.funStack, // this pulls in scala-java-time, which will drastically increase the javascript bundle size. Remove if not needed.
       "com.github.cornerman" %%% "colibri-router"      % versions.colibri,
+      "com.github.cornerman" %%% "colibri-reactive"    % versions.colibri,
     ),
     Compile / npmDependencies ++= readJsDependencies(baseDirectory.value, "dependencies") ++ Seq(
       "snabbdom"               -> "github:outwatch/snabbdom.git#semver:0.7.5", // for outwatch, workaround for: https://github.com/ScalablyTyped/Converter/issues/293
@@ -128,6 +129,8 @@ lazy val lambda = project
       "io.github.fun-stack" %%% "fun-stack-lambda-http-api-tapir"      % versions.funStack,
       "io.github.fun-stack" %%% "fun-stack-backend"                    % versions.funStack,
       "com.lihaoyi"         %%% "pprint"                               % versions.pprint,
+      "net.exoego"          %%% "aws-sdk-scalajs-facade-chime"         % "0.33.0-v2.892.0",
+      "com.github.fdietze"  %%% "odor"                                 % "0.0.0+15-ea855c94-SNAPSHOT",
     ),
     Compile / npmDependencies ++= readJsDependencies(baseDirectory.value, "dependencies"),
     stIgnore ++= List(
