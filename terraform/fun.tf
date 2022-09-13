@@ -4,7 +4,7 @@ locals {
 
 module "example" {
   source  = "fun-stack/fun/aws"
-  version = "0.10.4"
+  version = "0.10.5"
 
   stage = terraform.workspace
 
