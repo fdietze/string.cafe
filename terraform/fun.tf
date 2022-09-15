@@ -1,12 +1,15 @@
 locals {
   is_prod = terraform.workspace == "default"
+
+  name_prefix = "string-cafe-${terraform.workspace}"
 }
 
-module "example" {
+module "string_cafe" {
   source  = "fun-stack/fun/aws"
-  version = "0.10.4"
+  version = "0.10.6"
 
   stage = terraform.workspace
+  name_prefix = local.name_prefix
 
   # domain = {
   #   name                = "example.com"
@@ -41,6 +44,8 @@ module "example" {
       memory_size = 256
       environment = {
         NODE_OPTIONS = "--enable-source-maps"
+
+        SNS_CHIME_TOPIC_ARN = aws_sns_topic.meeting_events.arn
       }
     }
   }
@@ -72,11 +77,6 @@ module "example" {
   #   css_file   = "auth.css"
   # }
 
-  # budget = {
-  #   limit_monthly_dollar = "10.0"
-  #   notify_email         = "budget@example.com"
-  # }
-
   # dev_setup = {
   #   # enabled           = !local.is_prod
   #   local_website_url = "http://localhost:12345" # auth can redirect to that website, cors of http api allows origin
@@ -86,25 +86,4 @@ module "example" {
     aws = aws
     aws.us-east-1 = aws.us-east-1
   }
-}
-
-resource "aws_iam_policy" "lambda" {
-  name   = "lambda"
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action = [
-          "chime:*"
-        ]
-        Effect   = "Allow"
-        Resource = "*"
-      }
-    ]
-  })
-}
-
-resource "aws_iam_role_policy_attachment" "lambda" {
-  role       = module.example.http_rpc_role.name
-  policy_arn = aws_iam_policy.lambda.arn
 }
