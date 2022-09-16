@@ -11,11 +11,11 @@ module "string_cafe" {
   stage = terraform.workspace
   name_prefix = local.name_prefix
 
-  # domain = {
-  #   name                = "example.com"
-  #   deploy_to_subdomain = local.is_prod ? null : "${terraform.workspace}.env"
-  #   catch_all_email     = "me@example.net"
-  # }
+  domain = {
+    name                = "string.cafe"
+    deploy_to_subdomain = local.is_prod ? null : "${terraform.workspace}.env"
+    catch_all_email     = "string.cafe@felx.me"
+  }
 
   website = {
     source_dir              = "../webapp/target/scala-2.13/scalajs-bundler/main/dist"
