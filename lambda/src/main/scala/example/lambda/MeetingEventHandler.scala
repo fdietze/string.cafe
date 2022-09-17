@@ -1,14 +1,21 @@
 package example.lambda
 
+import net.exoego.facade.aws_lambda.{Context, SNSEvent}
+
 import scala.scalajs.js
 
 object MeetingEventHandler {
-  type Type = js.Function2[js.Object, js.Object, js.Promise[Unit]]
+  type Type = js.Function2[SNSEvent, Context, js.Promise[Unit]]
 
-  val handle: Type = { (a, b) =>
-    js.Dynamic.global.console.log("Event", a, b)
+  val handle: Type = { (event, context) =>
+    js.Dynamic.global.console.log("Event", event, context)
 
-    js.Promise.resolve[Unit](())
+    val handlers = event.Records.map { record =>
+      js.Dynamic.global.console.log("Record", record)
+      js.Promise.resolve[Unit](())
+    }
+
+    js.Promise.all(handlers).`then`[Unit](_ => ())
   }
 
 }
