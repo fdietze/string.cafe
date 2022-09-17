@@ -1,5 +1,36 @@
 resource "aws_sns_topic" "meeting_events" {
+  provider = aws.us-east-1
+
   name = "${local.name_prefix}-chime-meeting-events"
+}
+
+resource "aws_sns_topic_policy" "meeting_events" {
+  provider = aws.us-east-1
+
+  arn = aws_sns_topic.meeting_events.arn
+
+  policy = <<EOF
+{
+   "Version": "2008-10-17",
+    "Statement": [
+      {
+        "Effect": "Allow",
+        "Principal": {
+          "Service": "chime.amazonaws.com"
+        },
+        "Action": [
+          "sns:Publish"
+        ],
+        "Resource": "${aws_sns_topic.meeting_events.arn}",
+        "Condition": {
+          "StringEquals": {
+            "aws:SourceAccount": "${data.aws_caller_identity.current.account_id}"
+          }
+        }
+      }
+   ]
+}
+EOF
 }
 
 module "meeting_event_handler" {
@@ -19,6 +50,7 @@ module "meeting_event_handler" {
 }
 
 resource "aws_sns_topic_subscription" "meeting_event_handler" {
+  provider = aws.us-east-1
   topic_arn = aws_sns_topic.meeting_events.arn
   protocol  = "lambda"
   endpoint  = module.meeting_event_handler.function.arn
