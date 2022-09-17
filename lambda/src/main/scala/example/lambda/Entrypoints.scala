@@ -5,16 +5,16 @@ import example.api.{EventApi, RpcApi}
 import funstack.lambda.{http, ws}
 import funstack.lambda.apigateway.Request
 import sloth.Router
-
 import chameleon.ext.circe._
+import funstack.lambda.ws.eventauthorizer.Message
 
 import scala.scalajs.js
 
 object Entrypoints {
   @js.annotation.JSExportTopLevel("httpApi")
-  val httpApi = http.api.tapir.Handler.handleKleisli(
-    HttpApiImpl.endpoints,
-  )
+  val httpApi = http.api.tapir.Handler.handle { request =>
+    new HttpApiImpl(request).endpoints
+  }
 
   @js.annotation.JSExportTopLevel("httpRpc")
   val httpRpc = http.rpc.Handler.handle { request: Request =>
@@ -29,11 +29,11 @@ object Entrypoints {
   }
 
   @js.annotation.JSExportTopLevel("wsEventAuth")
-  val wsEventAuth = ws.eventauthorizer.Handler.handleKleisli(
+  val wsEventAuth = ws.eventauthorizer.Handler.handleFunc { request: Message =>
     Router
-      .contra[String, ws.eventauthorizer.Handler.IOKleisli]
-      .route[EventApi[ws.eventauthorizer.Handler.IOKleisli]](EventApiAuthImpl),
-  )
+      .contra[String, ws.eventauthorizer.Handler.IOFunc1]
+      .route[EventApi[ws.eventauthorizer.Handler.IOFunc1]](new EventApiAuthImpl(request))
+  }
 
   @js.annotation.JSExportTopLevel("meetingEvents")
   val meetingEvents = MeetingEventHandler.handle

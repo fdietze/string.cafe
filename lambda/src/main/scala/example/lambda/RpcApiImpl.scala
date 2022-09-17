@@ -2,7 +2,6 @@ package example.lambda
 
 import scala.scalajs.js
 import scala.scalajs.js.JSConverters._
-import cats.data.Kleisli
 import cats.effect.IO
 import example.api.{EventApi, JoinInfo, RpcApi}
 import funstack.backend.Fun
@@ -25,8 +24,8 @@ object RpcApiImpl {
 class RpcApiImpl(request: apigateway.Request) extends RpcApi[IO] {
   import RpcApiImpl._
 
-  private val client     = Client.contra(Fun.ws.sendTransport[String])
-  private val streamsApi = client.wire[EventApi[Kleisli[IO, *, Unit]]]
+  private val client     = Client.contra(Fun.ws.sendTransportFunction[String])
+  private val streamsApi = client.wire[EventApi[* => IO[Unit]]]
 
   def listMeetings = {
     val meetings = IO.fromFuture(IO(chime.listMeetingsFuture(ListMeetingsRequest())))

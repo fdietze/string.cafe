@@ -1,30 +1,24 @@
 package example.lambda
 
 import example.api.{EventApi, HttpApi}
-
-import funstack.lambda.apigateway.Handler
+import funstack.lambda.apigateway.{Handler, Request}
 import funstack.backend.Fun
-
 import sloth.Client
 import cats.effect.IO
-import cats.data.Kleisli
-
 import chameleon.ext.circe._
 
-object HttpApiImpl {
-  private val client     = Client.contra(Fun.ws.sendTransport[String])
-  private val streamsApi = client.wire[EventApi[Kleisli[IO, *, Unit]]]
+class HttpApiImpl(request: Request) {
+  private val client     = Client.contra(Fun.ws.sendTransportFunction[String])
+  private val streamsApi = client.wire[EventApi[* => IO[Unit]]]
 
-  val booksListingImpl = HttpApi.booksListing.serverLogic[Handler.IOKleisli] { case (_, _) =>
-    Kleisli { req =>
-      val userId = req.auth.map(_.sub)
-      // val userAttrs = userId.traverse(Fun.auth.getUser(_))
+  val booksListingImpl = HttpApi.booksListing.serverLogic[IO] { case (_, _) =>
+    val userId = request.auth.map(_.sub)
+    // val userAttrs = userId.traverse(Fun.auth.getUser(_))
 
-      val sendEvent = streamsApi.myMessages.apply(s"HttpApi Request by ${userId}!")
-      val response  = IO.pure(Right(List(HttpApi.Book("Programming in Scala"))))
+    val sendEvent = streamsApi.myMessages.apply(s"HttpApi Request by ${userId}!")
+    val response  = IO.pure(Right(List(HttpApi.Book("Programming in Scala"))))
 
-      sendEvent *> response
-    }
+    sendEvent *> response
   }
 
   val endpoints = List(
