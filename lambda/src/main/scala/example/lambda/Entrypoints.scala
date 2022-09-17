@@ -34,4 +34,7 @@ object Entrypoints {
       .contra[String, ws.eventauthorizer.Handler.IOKleisli]
       .route[EventApi[ws.eventauthorizer.Handler.IOKleisli]](EventApiAuthImpl),
   )
+
+  @js.annotation.JSExportTopLevel("meetingEvents")
+  val meetingEvents = MeetingEventHandler.handle
 }
