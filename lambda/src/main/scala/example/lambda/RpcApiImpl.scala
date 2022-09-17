@@ -1,12 +1,7 @@
 package example.lambda
 
-import scala.scalajs.js
-import scala.scalajs.js.JSConverters._
 import cats.effect.IO
-import example.api.{EventApi, JoinInfo, RpcApi}
-import funstack.backend.Fun
-import funstack.lambda.apigateway
-import sloth.Client
+import example.api.{JoinInfo, RpcApi}
 import facade.amazonaws.AWSConfig
 import facade.amazonaws.services.chime.{
   Chime,
@@ -15,17 +10,20 @@ import facade.amazonaws.services.chime.{
   ListMeetingsRequest,
   MeetingNotificationConfiguration,
 }
-import chameleon.ext.circe._
+import funstack.backend.Fun
+import funstack.lambda.apigateway
+
+import java.util.UUID
+import scala.annotation.unused
+import scala.scalajs.js
+import scala.scalajs.js.JSConverters._
 
 object RpcApiImpl {
   private val chime = new Chime(AWSConfig.apply(region = "us-east-1"))
 }
 
-class RpcApiImpl(request: apigateway.Request) extends RpcApi[IO] {
+class RpcApiImpl(@unused request: apigateway.Request) extends RpcApi[IO] {
   import RpcApiImpl._
-
-  private val client     = Client.contra(Fun.ws.sendTransportFunction[String])
-  private val streamsApi = client.wire[EventApi[* => IO[Unit]]]
 
   def listMeetings = {
     val meetings = IO.fromFuture(IO(chime.listMeetingsFuture(ListMeetingsRequest())))
@@ -36,6 +34,7 @@ class RpcApiImpl(request: apigateway.Request) extends RpcApi[IO] {
   def createMeeting = {
     val request = CreateMeetingRequest(
       null,
+      ExternalMeetingId = UUID.randomUUID().toString,
       NotificationsConfiguration = MeetingNotificationConfiguration(
         SnsTopicArn = Fun.config.environment.get("SNS_CHIME_TOPIC_ARN").orUndefined,
       ),

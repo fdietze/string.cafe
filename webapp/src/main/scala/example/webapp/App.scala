@@ -1,18 +1,16 @@
 package example.webapp
 
-import colibri.Cancelable
 import colibri.reactive._
-import org.scalajs.dom
 import org.scalajs.dom.{console, document, HTMLAudioElement, HTMLVideoElement}
+import org.scalajs.macrotaskexecutor.MacrotaskExecutor.Implicits.global
 import outwatch._
 import outwatch.dsl._
 import typings.amazonChimeSdkJs.audioVideoObserverMod.AudioVideoObserver
-import typings.amazonChimeSdkJs.{defaultMeetingSessionMod, meetingSessionConfigurationMod}
-import typings.amazonChimeSdkJs.mod.{ConsoleLogger, DefaultDeviceController, DefaultMeetingSession, LogLevel}
+import typings.amazonChimeSdkJs.meetingSessionConfigurationMod
+import typings.amazonChimeSdkJs.mod.{ConsoleLogger, DefaultDeviceController, DefaultMeetingSession}
 
 import scala.scalajs.js
-import scala.scalajs.js.annotation.{JSGlobal, JSImport}
-import org.scalajs.macrotaskexecutor.MacrotaskExecutor.Implicits.global
+import scala.scalajs.js.annotation.JSImport
 
 @JSImport("amazon-chime-sdk-js", "DefaultMeetingSession")
 @js.native
@@ -22,15 +20,6 @@ class MyDefaultMeetingSession extends js.Object {
     logger: js.Any,
     deviceController: js.Any,
   ) = this()
-}
-
-@js.native
-@JSGlobal
-class JitsiMeetExternalAPI(domain: String, options: js.Object) extends js.Object {
-  // https://jitsi.github.io/handbook/docs/dev-guide/dev-guide-iframe/#creating-the-jitsi-meet-api-object
-  def dispose(): Unit                                    = js.native
-  def getNumberOfParticipants(): Int                     = js.native
-  def executeCommand(command: String, arg: String): Unit = js.native
 }
 
 object App {
@@ -186,24 +175,4 @@ object App {
       },
     )
   }
-
-  def jitsiRoom(roomName: String, language: String, subject: String) = {
-    div(
-      VModifier.managedElement.asHtml { elem =>
-        val domain = "meet.jit.si"
-        val options = js.Dynamic.literal(
-          roomName = roomName,
-          width = 700,
-          height = 700,
-          parentNode = elem,
-          lang = language,
-        )
-        val api = new JitsiMeetExternalAPI(domain, options)
-        api.executeCommand("localSubject", subject);
-
-        Cancelable(() => api.dispose())
-      },
-    )
-  }
-
 }

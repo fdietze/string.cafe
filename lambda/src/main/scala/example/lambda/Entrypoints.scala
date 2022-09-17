@@ -2,11 +2,11 @@ package example.lambda
 
 import cats.effect.IO
 import example.api.{EventApi, RpcApi}
-import funstack.lambda.{http, ws}
 import funstack.lambda.apigateway.Request
+import funstack.lambda.ws.eventauthorizer.Message
+import funstack.lambda.{http, ws}
 import sloth.Router
 import chameleon.ext.circe._
-import funstack.lambda.ws.eventauthorizer.Message
 
 import scala.scalajs.js
 

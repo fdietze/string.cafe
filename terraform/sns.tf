@@ -45,8 +45,8 @@ module "meeting_event_handler" {
   runtime     = "nodejs14.x"
   handler     = "main.meetingEvents"
 
-  # environment = {
-  # }
+  environment = merge(module.string_cafe.backend_environment_vars, {
+  })
 }
 
 resource "aws_sns_topic_subscription" "meeting_event_handler" {
