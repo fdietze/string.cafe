@@ -1,7 +1,7 @@
 {
   "license": "UNLICENSED",
   "dependencies": {
-    "amazon-chime-sdk-js": "^2.30.1"
+    "amazon-chime-sdk-js": "^3.7.0"
   },
   "devDependencies": {
     "@fun-stack/fun-pack": "0.2.5",
