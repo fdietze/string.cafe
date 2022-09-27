@@ -1,0 +1,25 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+datasource db {
+  provider = "cockroachdb"
+  url      = env("DATABASE_URL")
+}
+
+model Topic {
+  name     String    @id
+  meetings Meeting[]
+}
+
+model Meeting {
+  id        String     @id
+  topic     Topic      @relation(fields: [topicName], references: [name])
+  topicName String
+  attendees Attendee[]
+}
+
+model Attendee {
+  id        String  @id
+  meeting   Meeting @relation(fields: [meetingId], references: [id])
+  meetingId String
+}
