@@ -1,6 +1,7 @@
 package example.webapp
 
 import colibri.reactive._
+import example.api.JoinInfo
 import org.scalajs.dom.{console, document, HTMLAudioElement, HTMLVideoElement}
 import org.scalajs.macrotaskexecutor.MacrotaskExecutor.Implicits.global
 import outwatch._
@@ -8,6 +9,10 @@ import outwatch.dsl._
 import typings.amazonChimeSdkJs.audioVideoObserverMod.AudioVideoObserver
 import typings.amazonChimeSdkJs.meetingSessionConfigurationMod
 import typings.amazonChimeSdkJs.mod.{ConsoleLogger, DefaultDeviceController, DefaultMeetingSession}
+import cats.effect.IO
+
+import io.circe._
+import io.circe.syntax._
 
 import scala.scalajs.js
 import scala.scalajs.js.annotation.JSImport
@@ -30,7 +35,7 @@ object App {
   );
   val deviceController = new DefaultDeviceController(logger);
 
-  def createMeeting(audioElement: HTMLAudioElement, meeting: js.Dynamic, attendee: js.Dynamic) = {
+  def createMeeting(audioElement: HTMLAudioElement, joinInfo: JoinInfo) = {
     console.log("DU DEV", deviceController)
 
     // val meetingId      = data.Info.Meeting.Meeting.MeetingId;
@@ -38,11 +43,11 @@ object App {
     //  document.getElementById("meeting-link").innerText = window.location.href + "?meetingId=" + meetingId;
     // }
 
-    console.log(meeting, attendee)
+    console.log(joinInfo)
 
     val configuration = new meetingSessionConfigurationMod.default(
-      meeting,
-      attendee,
+      js.Dynamic.literal(Meeting = js.JSON.parse(joinInfo.Meeting.asJson.noSpaces)),
+      js.Dynamic.literal(Attendee = js.JSON.parse(joinInfo.Attendee.asJson.noSpaces)),
     );
 
     console.log("HAVE IT", configuration)
@@ -122,55 +127,38 @@ object App {
     }
   }
 
-  def videoCallRender(meeting: js.Dynamic, attendee: js.Dynamic) = div(
+  def videoCallRender(joinInfo: JoinInfo) = div(
     idAttr := "video-list",
     "VIDEO TILES",
     audio(
       onDomMount.mapFuture { audioElement =>
         try {
 
-          createMeeting(audioElement.asInstanceOf[HTMLAudioElement], meeting, attendee)
+          createMeeting(audioElement.asInstanceOf[HTMLAudioElement], joinInfo)
         } catch { case t: Throwable => t.printStackTrace(); throw t }
       }.discard,
     ),
   )
 
-  val currentMeeting = Var(Option.empty[String])
+  val currentMeeting = Var(Option.empty[JoinInfo])
 
   def layout = {
     div(
       Owned[VModifier] {
         currentMeeting.map[VModifier] {
           case None =>
-            val listMeetings = HttpRpcClient.api.listMeetings
+            val string = Var("")
             div(
+              input(tpe := "text", placeholder := "Your String", onInput.value --> string),
               button(
-                "Create Meeting",
-                cls := "btn btn-small",
-                onClick.doEffect(HttpRpcClient.api.createMeeting.void),
+                "join",
+                onClick.asEffect {
+                  IO.defer(HttpRpcClient.api.join(string.now())).map(Some(_))
+                } --> currentMeeting,
               ),
-              listMeetings.map { meetingsJson =>
-                meetingsJson.map { meetingJson =>
-                  div(
-                    s"Meeting: ${js.JSON.parse(meetingJson).MeetingId}",
-                    button(
-                      "Join",
-                      cls := "btn btn-small",
-                      onClick.as(Some(meetingJson)) --> currentMeeting,
-                    ),
-                  )
-                }
-              },
             )
-          case Some(meetingJson) =>
-            val meeting = js.JSON.parse(meetingJson)
-            val getAttendee = HttpRpcClient.api
-              .joinMeeting(util.Random.alphanumeric.take(5).mkString, meeting.MeetingId.asInstanceOf[String])
-            getAttendee.map { attendeeJson =>
-              val attendee = js.JSON.parse(attendeeJson)
-
-              videoCallRender(meeting, attendee)
-            }
+          case Some(joinInfo) =>
+            videoCallRender(joinInfo)
         }
       },
     )
