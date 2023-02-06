@@ -6,7 +6,7 @@ locals {
 
 module "string_cafe" {
   source  = "fun-stack/fun/aws"
-  version = "0.11.1"
+  version = "0.11.14"
 
   stage = terraform.workspace
   name_prefix = local.name_prefix
