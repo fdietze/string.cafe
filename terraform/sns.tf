@@ -35,7 +35,7 @@ EOF
 
 module "meeting_event_handler" {
   source  = "cornerman/lambda/aws"
-  version = "0.1.3"
+  version = "0.1.4"
 
   name = "${local.name_prefix}-meeting-event-handler"
 
