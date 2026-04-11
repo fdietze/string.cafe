@@ -13,7 +13,10 @@ run:
 	nix develop -c php -S 127.0.0.1:8000 -t public
 
 gen:
-	nix run .#write-fly-assets
+	nix run .#write-fly-toml
+
+image:
+	nix build .#fly-image
 
 deploy:
 	nix run .#fly-deploy
