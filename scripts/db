@@ -6,16 +6,15 @@ source "$(dirname "$0")/db-common.sh"
 cleanup() {
   rm -f "${PLAN_FILE:-}"
 
-  if [ -n "${TARGET_DB:-}" ] && postgres_is_ready && database_exists "$TARGET_DB"; then
-    dropdb "$TARGET_DB"
+  if [ -n "${TARGET_DB:-}" ] && [ -n "${TARGET_PGHOST:-}" ] && [ -n "${TARGET_PGPORT:-}" ] && postgres_is_ready "$TARGET_PGHOST" "$TARGET_PGPORT" && database_exists "$TARGET_DB" "$TARGET_PGHOST" "$TARGET_PGPORT"; then
+    PGHOST="$TARGET_PGHOST" PGPORT="$TARGET_PGPORT" dropdb "$TARGET_DB"
   fi
 
-  stop_temp_postgres_if_started
+  stop_postgres_if_started
 }
 
 run_postgres_server() {
-  init_db_cluster
-  ensure_layout
+  init_persistent_db_cluster
 
   postgres \
     -D "$PGDATA" \
@@ -38,37 +37,14 @@ run_postgres_server() {
 
   trap shutdown_server EXIT INT TERM
 
-  wait_for_postgres
-  ensure_database_exists "$PGDATABASE"
+  wait_for_postgres "$PGHOST" "$PGPORT"
+  ensure_database_exists "$PGDATABASE" "$PGHOST" "$PGPORT"
 
   wait "$server_pid"
 }
 
-apply_schema_to_named_database() {
-  local db_name="$1"
-
-  PGDATABASE="$db_name" pgschema apply \
-    --file "$REPO_ROOT/schema.sql" \
-    --auto-approve
-}
-
-apply_migrations_to_named_database() {
-  local db_name="$1"
-  local migration_file
-
-  shopt -s nullglob
-
-  for migration_file in "$REPO_ROOT"/migrations/*.sql; do
-    printf 'Applying migration %s\n' "$(basename "$migration_file")"
-    psql \
-      --dbname="$db_name" \
-      --set=ON_ERROR_STOP=1 \
-      --file="$migration_file"
-  done
-}
-
 cmd_init() {
-  init_db_cluster
+  init_persistent_db_cluster
   printf 'Initialized Postgres data directory at %s\n' "$PGDATA"
 }
 
@@ -77,15 +53,15 @@ cmd_run() {
 }
 
 cmd_wait() {
-  wait_for_postgres
+  wait_for_postgres "$PGHOST" "$PGPORT"
   printf 'Postgres is ready on %s:%s\n' "$PGHOST" "$PGPORT"
 }
 
 cmd_psql() {
   trap cleanup EXIT
 
-  start_temp_postgres_if_needed
-  ensure_database_exists "$PGDATABASE"
+  start_persistent_postgres_if_needed
+  ensure_database_exists "$PGDATABASE" "$PGHOST" "$PGPORT"
 
   psql "$DATABASE_URL"
 }
@@ -93,9 +69,9 @@ cmd_psql() {
 cmd_reset() {
   trap cleanup EXIT
 
-  start_temp_postgres_if_needed
-  recreate_database "$PGDATABASE"
-  apply_schema_to_named_database "$PGDATABASE"
+  start_persistent_postgres_if_needed
+  recreate_database "$PGDATABASE" "$PGHOST" "$PGPORT"
+  apply_schema_to_database "$PGDATABASE" "$PGHOST" "$PGPORT"
 
   printf 'Reset %s from schema.sql\n' "$PGDATABASE"
 }
@@ -103,9 +79,9 @@ cmd_reset() {
 cmd_reset_from_migrations() {
   trap cleanup EXIT
 
-  start_temp_postgres_if_needed
-  recreate_database "$PGDATABASE"
-  apply_migrations_to_named_database "$PGDATABASE"
+  start_persistent_postgres_if_needed
+  recreate_database "$PGDATABASE" "$PGHOST" "$PGPORT"
+  apply_migrations_to_database "$PGDATABASE" "$PGHOST" "$PGPORT"
 
   printf 'Reset %s from migrations\n' "$PGDATABASE"
 }
@@ -113,15 +89,17 @@ cmd_reset_from_migrations() {
 cmd_check_migrations() {
   trap cleanup EXIT
 
-  start_temp_postgres_if_needed
+  start_ephemeral_postgres_cluster
 
   TARGET_DB="$(make_temp_database_name)"
+  TARGET_PGHOST="$TEMP_PGSOCKETDIR"
+  TARGET_PGPORT="$TEMP_PGPORT"
   PLAN_FILE="$(mktemp)"
 
-  createdb "$TARGET_DB"
-  apply_migrations_to_named_database "$TARGET_DB"
+  PGHOST="$TARGET_PGHOST" PGPORT="$TARGET_PGPORT" createdb "$TARGET_DB"
+  apply_migrations_to_database "$TARGET_DB" "$TARGET_PGHOST" "$TARGET_PGPORT"
 
-  PGDATABASE="$TARGET_DB" pgschema plan \
+  PGHOST="$TARGET_PGHOST" PGPORT="$TARGET_PGPORT" PGDATABASE="$TARGET_DB" pgschema plan \
     --file "$REPO_ROOT/schema.sql" \
     --output-sql "$PLAN_FILE" \
     --no-color
@@ -155,17 +133,19 @@ cmd_generate_migration() {
 
   trap cleanup EXIT
 
-  start_temp_postgres_if_needed
+  start_ephemeral_postgres_cluster
 
   TARGET_DB="$(make_temp_database_name)"
+  TARGET_PGHOST="$TEMP_PGSOCKETDIR"
+  TARGET_PGPORT="$TEMP_PGPORT"
   PLAN_FILE="$(mktemp)"
   timestamp="$(date -u +%Y%m%d%H%M%S)"
   migration_file="$REPO_ROOT/migrations/${timestamp}_${migration_name}.sql"
 
-  createdb "$TARGET_DB"
-  apply_migrations_to_named_database "$TARGET_DB"
+  PGHOST="$TARGET_PGHOST" PGPORT="$TARGET_PGPORT" createdb "$TARGET_DB"
+  apply_migrations_to_database "$TARGET_DB" "$TARGET_PGHOST" "$TARGET_PGPORT"
 
-  PGDATABASE="$TARGET_DB" pgschema plan \
+  PGHOST="$TARGET_PGHOST" PGPORT="$TARGET_PGPORT" PGDATABASE="$TARGET_DB" pgschema plan \
     --file "$REPO_ROOT/schema.sql" \
     --output-sql "$PLAN_FILE" \
     --no-color
@@ -180,7 +160,7 @@ cmd_generate_migration() {
 }
 
 cmd_wipe() {
-  if postgres_is_ready; then
+  if postgres_is_ready "$PGHOST" "$PGPORT"; then
     printf >&2 'Refusing to wipe %s while Postgres is still running on %s:%s.\n' "$PGDATA" "$PGHOST" "$PGPORT"
     exit 1
   fi

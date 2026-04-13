@@ -36,6 +36,7 @@ You must always keep this file up-to date for: project requirements, architectur
 - A small repo-local shell implementation is fine, but avoid a large fleet of tiny wrapper scripts when one dispatcher will do.
 - Generated operational files are easier to trust when their logic lives in one place.
 - The persistent dev database must stay outside migration generation and migration verification. Those workflows use disposable databases only.
+- Disposable database workflows should use isolated socket-only temporary Postgres clusters instead of competing for the persistent dev TCP port.
 - `just dev` should make the local PHP and Postgres stack work without any manual database bootstrap.
 - Simple PHP hosting is enough for this project; avoid introducing framework or infrastructure complexity without a clear reason.
 

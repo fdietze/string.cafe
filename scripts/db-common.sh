@@ -29,43 +29,57 @@ ensure_layout() {
 }
 
 init_db_cluster() {
-  ensure_layout
+  local data_dir="$1"
+  local socket_dir="$2"
 
-  if [ -d "$PGDATA" ]; then
+  mkdir -p "$(dirname "$data_dir")"
+  mkdir -p "$socket_dir"
+
+  if [ -d "$data_dir" ]; then
     return
   fi
 
   initdb \
-    --pgdata="$PGDATA" \
+    --pgdata="$data_dir" \
     --username="$PGUSER" \
     --auth=trust \
     --no-locale \
     --encoding=UTF8
 
-  cat >>"$PGDATA/pg_hba.conf" <<'EOF'
+  cat >>"$data_dir/pg_hba.conf" <<'EOF'
 host    all             all             127.0.0.1/32            trust
 host    all             all             ::1/128                 trust
 local   all             all                                     trust
 EOF
 }
 
+init_persistent_db_cluster() {
+  ensure_layout
+  init_db_cluster "$PGDATA" "$PGSOCKETDIR"
+}
+
 postgres_is_ready() {
+  local host="$1"
+  local port="$2"
+
   pg_isready \
-    --host="$PGHOST" \
-    --port="$PGPORT" \
+    --host="$host" \
+    --port="$port" \
     --username="$PGUSER" \
     --dbname=postgres \
     >/dev/null 2>&1
 }
 
 wait_for_postgres() {
+  local host="$1"
+  local port="$2"
   local attempts=0
 
-  until postgres_is_ready; do
+  until postgres_is_ready "$host" "$port"; do
     attempts=$((attempts + 1))
 
     if [ "$attempts" -ge 50 ]; then
-      printf >&2 'Postgres did not become ready on %s:%s.\n' "$PGHOST" "$PGPORT"
+      printf >&2 'Postgres did not become ready on %s:%s.\n' "$host" "$port"
       exit 1
     fi
 
@@ -73,12 +87,12 @@ wait_for_postgres() {
   done
 }
 
-start_temp_postgres_if_needed() {
-  if postgres_is_ready; then
+start_persistent_postgres_if_needed() {
+  if postgres_is_ready "$PGHOST" "$PGPORT"; then
     return
   fi
 
-  init_db_cluster
+  init_persistent_db_cluster
 
   postgres \
     -D "$PGDATA" \
@@ -92,20 +106,55 @@ start_temp_postgres_if_needed() {
 
   TEMP_POSTGRES_PID=$!
   export TEMP_POSTGRES_PID
-  wait_for_postgres
+  wait_for_postgres "$PGHOST" "$PGPORT"
 }
 
-stop_temp_postgres_if_started() {
+start_ephemeral_postgres_cluster() {
+  TEMP_PGROOT="$(mktemp -d)"
+  TEMP_PGDATA="$TEMP_PGROOT/data"
+  TEMP_PGSOCKETDIR="$TEMP_PGROOT/socket"
+  TEMP_PGPORT="5432"
+
+  export TEMP_PGROOT
+  export TEMP_PGDATA
+  export TEMP_PGSOCKETDIR
+  export TEMP_PGPORT
+
+  init_db_cluster "$TEMP_PGDATA" "$TEMP_PGSOCKETDIR"
+
+  postgres \
+    -D "$TEMP_PGDATA" \
+    -k "$TEMP_PGSOCKETDIR" \
+    -p "$TEMP_PGPORT" \
+    -c listen_addresses='' \
+    -c unix_socket_directories="$TEMP_PGSOCKETDIR" \
+    -c "log_min_duration_statement=$PGLOG_MIN_DURATION_MS" \
+    -c log_line_prefix='%m [%p] ' \
+    &
+
+  TEMP_POSTGRES_PID=$!
+  export TEMP_POSTGRES_PID
+
+  wait_for_postgres "$TEMP_PGSOCKETDIR" "$TEMP_PGPORT"
+}
+
+stop_postgres_if_started() {
   if [ -n "${TEMP_POSTGRES_PID:-}" ] && kill -0 "$TEMP_POSTGRES_PID" 2>/dev/null; then
     kill "$TEMP_POSTGRES_PID"
     wait "$TEMP_POSTGRES_PID" || true
+  fi
+
+  if [ -n "${TEMP_PGROOT:-}" ] && [ -d "$TEMP_PGROOT" ]; then
+    rm -rf "$TEMP_PGROOT"
   fi
 }
 
 database_exists() {
   local db_name="$1"
+  local host="$2"
+  local port="$3"
 
-  psql \
+  PGHOST="$host" PGPORT="$port" psql \
     --dbname=postgres \
     --tuples-only \
     --no-align \
@@ -115,50 +164,60 @@ database_exists() {
 
 ensure_database_exists() {
   local db_name="$1"
+  local host="$2"
+  local port="$3"
 
-  if database_exists "$db_name"; then
+  if database_exists "$db_name" "$host" "$port"; then
     return
   fi
 
-  createdb "$db_name"
+  PGHOST="$host" PGPORT="$port" createdb "$db_name"
 }
 
 terminate_database_connections() {
   local db_name="$1"
+  local host="$2"
+  local port="$3"
 
-  psql \
+  PGHOST="$host" PGPORT="$port" psql \
     --dbname=postgres \
     --command="SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '$db_name' AND pid <> pg_backend_pid();"
 }
 
 recreate_database() {
   local db_name="$1"
+  local host="$2"
+  local port="$3"
 
-  if database_exists "$db_name"; then
-    terminate_database_connections "$db_name"
-    dropdb "$db_name"
+  if database_exists "$db_name" "$host" "$port"; then
+    terminate_database_connections "$db_name" "$host" "$port"
+    PGHOST="$host" PGPORT="$port" dropdb "$db_name"
   fi
 
-  createdb "$db_name"
+  PGHOST="$host" PGPORT="$port" createdb "$db_name"
 }
 
 apply_schema_to_database() {
   local db_name="$1"
+  local host="$2"
+  local port="$3"
 
-  PGDATABASE="$db_name" pgschema apply \
+  PGHOST="$host" PGPORT="$port" PGDATABASE="$db_name" pgschema apply \
     --file "$REPO_ROOT/schema.sql" \
     --auto-approve
 }
 
 apply_migrations_to_database() {
   local db_name="$1"
+  local host="$2"
+  local port="$3"
   local migration_file
 
   shopt -s nullglob
 
   for migration_file in "$REPO_ROOT"/migrations/*.sql; do
     printf 'Applying migration %s\n' "$(basename "$migration_file")"
-    psql \
+    PGHOST="$host" PGPORT="$port" psql \
       --dbname="$db_name" \
       --set=ON_ERROR_STOP=1 \
       --file="$migration_file"
