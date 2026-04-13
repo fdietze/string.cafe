@@ -1,0 +1,4 @@
+-- Initial migration for string.cafe.
+--
+-- The schema is intentionally empty for now. Keep this file append-only and
+-- create a new migration for every schema change.

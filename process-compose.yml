@@ -1,0 +1,22 @@
+version: "0.5"
+is_strict: true
+
+environment:
+  - FORCE_COLOR=1
+
+processes:
+  postgres:
+    command: "db-run"
+    shutdown:
+      signal: 2
+      timeout_seconds: 5
+    ready_log_line: "ready to accept connections"
+
+  app:
+    command: "php -S 127.0.0.1:${APP_PORT:-8000} -t public"
+    shutdown:
+      signal: 2
+      timeout_seconds: 5
+    depends_on:
+      postgres:
+        condition: process_log_ready
