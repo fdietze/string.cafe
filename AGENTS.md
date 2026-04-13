@@ -12,6 +12,7 @@ You must always keep this file up-to date for: project requirements, architectur
 ## Architecture
 
 - The application is a minimal PHP app served from `public/index.php`.
+- The index page reads and writes channel records directly against Postgres using PDO.
 - `flake.nix` defines the development environment, the generated Fly config, the runtime image, and the deploy command.
 - The local Postgres development environment is repo-local and Nix-provided. Database state lives under `.local/postgres/`.
 - `schema.sql` defines the desired Postgres schema. Schema changes start there.

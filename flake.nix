@@ -20,7 +20,16 @@
             pkgs = import nixpkgs { inherit system; };
             lib = pkgs.lib;
             bash = pkgs.bash;
-            php = pkgs.php84;
+            php = pkgs.php84.withExtensions (
+              {
+                enabled,
+                all,
+              }:
+              enabled
+              ++ [
+                all.pdo_pgsql
+              ]
+            );
             postgresql = pkgs.postgresql_17;
             defaultAppName = "string-cafe-felx";
             defaultRegion = "ams";
